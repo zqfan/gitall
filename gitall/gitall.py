@@ -11,15 +11,19 @@ def main():
     next_url = 'https://api.github.com/orgs/openstack/repos'
     while next_url:
         print 'request repo page %s' % repo_page_count
-        resp = requests.get(next_url)
-        if resp.status_code == 403:
-            print 'API rate limit exceeded, exit'
-            exit(1)
-        repo_page = json.loads(resp.content)
-        for repo in repo_page:
-            repo_html_urls[repo['name']] = repo['html_url']
-        next_url = resp.links.get('next', {}).get('url')
-        repo_page_count += 1
+        try:
+            resp = requests.get(next_url)
+        except Exception as e:
+            print e
+        else:
+            if resp.status_code == 403:
+                print 'API rate limit exceeded, exit'
+                exit(1)
+            repo_page = json.loads(resp.content)
+            for repo in repo_page:
+                repo_html_urls[repo['name']] = repo['html_url']
+            next_url = resp.links.get('next', {}).get('url')
+            repo_page_count += 1
 
     print 'total repo count: %s' % len(repo_html_urls)
 
@@ -28,13 +32,21 @@ def main():
         dest_dir = os.path.join('./', name)
         if not os.path.exists(dest_dir):
             print '%s: %s: git clone %s' % (repo_count, name, url)
-            repo = git.Repo.clone_from(url, dest_dir)
+            try:
+                repo = git.Repo.clone_from(url, dest_dir)
+            except Exception as e:
+                print e
         else:
             print '%s: %s: git pull --ff-only' % (repo_count, name)
-            git.cmd.Git(dest_dir).pull(ff_only=True)
+            try:
+                # always prune origin in case of out dated branch
+                git.cmd.Git(dest_dir).remote("prune", "origin")
+                git.cmd.Git(dest_dir).pull(ff_only=True)
+            except Exception as e:
+                print e
         repo_count += 1
 
-    print 'all %s repositories succeed!' % repo_count - 1
+    print 'all %s repositories succeed!' % (repo_count - 1)
 
 if __name__ == '__main__':
     main()
